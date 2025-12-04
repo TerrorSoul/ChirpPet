@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / Build
+build/
+dist/
+*.spec
+
+# Logs
+*.log
+*.txt
+
+# Assets (Keep assets folder, ignore generated/debug images)
+*.png
+!assets/*.png
+
+# VS Code
+.vscode/
+
+# Node / JS (if applicable)
+node_modules/
+package.json
+package-lock.json
+*.js
+
+# Scratch / Test Files
+check_*.py
+test_*.py
+convert_icon.py
+oldversion/
