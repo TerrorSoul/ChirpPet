@@ -2,15 +2,6 @@
 
 A cute, interactive desktop pet written in Python with PyQt6.
 
-## Features
-
-*   **Desktop Companion**: Lives on your desktop with a transparent background.
-*   **Personality**: Has moods (Happy, Sleepy, Hyper, Grumpy) and Needs (Hunger, Energy).
-*   **Interaction**: Chases the mouse, can be dragged, fed, and petted.
-*   **Communication**: Speaks in a unique "Chirp" language with speech bubbles.
-*   **Customization**: Multiple styles (Default, Christmas, Sombrero, Melvin) that persist across restarts.
-*   **Physics**: Gravity and collision with screen boundaries.
-
 ## Installation
 
 1.  Install Python 3.x.
