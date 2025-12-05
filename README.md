@@ -32,3 +32,7 @@ To build a standalone `.exe` file:
 *   **Right-Click**: Open the context menu to Feed, Change Style, or Quit.
 *   **Drag**: Click and hold to pick up the pet.
 *   **Click**: Interact with the pet (wake it up, cheer it up).
+
+## Disclaimer
+
+This is a fan project and is not affiliated with, endorsed, sponsored, or specifically approved by Flashbulb Games or Trailmakers. All rights to the original characters and designs belong to their respective owners.
