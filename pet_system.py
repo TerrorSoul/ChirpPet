@@ -37,16 +37,6 @@ class SpriteLoader:
 
         print(f"Sheet: {sheet_width}x{sheet_height}, Sprite: {self.sprite_width}x{self.sprite_height}")
 
-        datas = img.getdata()
-        new_data = []
-        for item in datas:
-            if item[1] > 100 and item[1] > item[0] + 40 and item[1] > item[2] + 40:
-                new_data.append((0, 0, 0, 0))
-            else:
-                new_data.append(item)
-        
-        img.putdata(new_data)
-
         fixed_target_width = int(self.sprite_width * 0.5)
         fixed_target_height = int(self.sprite_height * 0.5)
         
@@ -99,10 +89,17 @@ class PetState:
     CEILING_WALK_RIGHT = 23
     SPAWN = 24
     DRAG = 25
+    PRE_CHASE = 26
+
+class PetMood:
+    HAPPY = 0
+    SLEEPY = 1
+    HYPER = 2
+    GRUMPY = 3
 
 class PetSystem:
-    def __init__(self, sprite_path='assets/defaultspritesheet.png'):
-        self.load_style(sprite_path)
+    def __init__(self, sprite_path='assets/defaultspritesheet.png', style_name='Default'):
+        self.load_style(sprite_path, style_name)
         
         self.current_state = PetState.SPAWN
         self.current_frame_index = 0
@@ -114,12 +111,26 @@ class PetSystem:
         self.rotation = 0 
         self.offset_x = 0
         self.offset_y = 0
+        
+        self.name = "ChirPet"
+        self.speech_text = ""
+        self.speech_timer = 0
+        self.next_speech_time = 5000 
+        
+        self.sounds = ["chirp", "peep", "tik", "mew", "kwee", "pip", "bip", "bop", "mrrp", "yip"]
+        
+        self.mood = PetMood.HAPPY
+        self.mood_timer = 0
+        self.mood_duration = 30000 
+        
+        self.hunger = 0 
+        self.energy = 100 
+        self.hunger_timer = 0
+        self.energy_timer = 0
 
-    def load_style(self, sprite_path):
+    def load_style(self, sprite_path, style_name='Default'):
         self.loader = SpriteLoader(sprite_path, 10, 10)
-        
         self.chirp_sounds = []
-        
         self.has_chirped = False
         
         self.animations = {
@@ -145,7 +156,13 @@ class PetSystem:
             PetState.DISCO: {'frames': [10], 'loop': True, 'interval': 100}, 
             PetState.SPAWN: {'frames': [10], 'loop': True, 'interval': 100}, 
             PetState.DRAG: {'frames': range(60, 70), 'loop': True, 'interval': 100}, 
+            PetState.PRE_CHASE: {'frames': range(90, 99), 'loop': False, 'next': PetState.CHASE, 'interval': 200},
         }
+        
+        if style_name == 'Melvin':
+            self.animations[PetState.FLAP_HARD] = {'frames': [10], 'loop': False, 'next': PetState.IDLE, 'interval': 100}
+            self.animations[PetState.INQUISITIVE] = {'frames': [10], 'loop': False, 'next': PetState.IDLE, 'interval': 200}
+            self.animations[PetState.PRE_CHASE] = {'frames': [10], 'loop': False, 'next': PetState.CHASE, 'interval': 200}
         
         self.idle_counter = 0
 
@@ -207,6 +224,49 @@ class PetSystem:
 
             if self.current_frame_index >= 2 and not self.has_chirped:
                 self.has_chirped = True
+        
+        if self.speech_timer > 0:
+            self.speech_timer -= dt_ms
+            if self.speech_timer <= 0:
+                self.speech_text = ""
+
+        self.next_speech_time -= dt_ms
+        if self.next_speech_time <= 0:
+            self.say_random_thing()
+            import random
+            self.next_speech_time = random.randint(30000, 90000)
+
+        # Mood updates
+        self.mood_timer += dt_ms
+        if self.mood_timer > self.mood_duration:
+            self.change_mood_randomly()
+
+        self.hunger_timer += dt_ms
+        if self.hunger_timer > 5000:
+            self.hunger = min(100, self.hunger + 1)
+            self.hunger_timer = 0
+            
+        self.energy_timer += dt_ms
+        if self.energy_timer > 5000:
+            if self.current_state == PetState.SLEEP:
+                self.energy = min(100, self.energy + 5)
+            elif self.current_state in [PetState.ZOOMIES, PetState.CHASE, PetState.MOVE_RIGHT, PetState.MOVE_LEFT]:
+                self.energy = max(0, self.energy - 2)
+            else:
+                self.energy = max(0, self.energy - 0.5)
+            self.energy_timer = 0
+
+        # Needs affecting Mood
+        if self.hunger > 80:
+            if self.mood != PetMood.GRUMPY and self.mood != PetMood.SLEEPY:
+                self.mood = PetMood.GRUMPY
+                self.speech_text = "Grrr..."
+                self.speech_timer = 2000
+        elif self.energy < 20:
+             if self.mood != PetMood.SLEEPY:
+                 self.mood = PetMood.SLEEPY
+                 self.speech_text = "Zzz..."
+                 self.speech_timer = 2000
 
         if self.frame_timer >= anim['interval']:
             self.frame_timer = 0
@@ -242,32 +302,112 @@ class PetSystem:
                         if random.random() < 0.3: 
                             r = random.random()
                             
-                            if r < 0.40: 
-                                if random.random() < 0.5:
-                                    self.set_state(PetState.MOVE_RIGHT)
-                                else:
-                                    self.set_state(PetState.MOVE_LEFT)
-                            elif r < 0.50:
-                                self.set_state(PetState.LOOK_SEQUENCE)
-                            elif r < 0.60:
-                                self.set_state(PetState.SPEAK)
-                            elif r < 0.70:
-                                self.set_state(PetState.INQUISITIVE)
-                            elif r < 0.75:
-                                self.set_state(PetState.SLEEP)
-                            elif r < 0.80:
-                                self.set_state(PetState.SPIN)
-                            elif r < 0.85:
-                                self.set_state(PetState.JUMP)
-                            elif r < 0.92:
-                                self.set_state(PetState.SHAKE)
-                            elif r < 0.94: 
-                                if random.random() < 0.5:
-                                    self.set_state(PetState.MOONWALK_RIGHT)
-                                else:
-                                    self.set_state(PetState.MOONWALK_LEFT)
-                            else: 
-                                self.set_state(PetState.ZOOMIES)
+                    if self.current_state == PetState.IDLE:
+                        import random
+                        if random.random() < 0.3: 
+                            r = random.random()
+                            
+                            if mouse_pos and window_pos:
+                                dx = mouse_pos.x() - window_pos.x()
+                                dy = mouse_pos.y() - window_pos.y()
+                                dist = (dx*dx + dy*dy)**0.5
+                                
+                                if dist < 300:
+                                    if self.mood == PetMood.GRUMPY:
+                                        if random.random() < 0.7:
+                                            if dx > 0: self.set_state(PetState.MOVE_LEFT)
+                                            else: self.set_state(PetState.MOVE_RIGHT)
+                                            return
+                                    elif self.mood in [PetMood.HAPPY, PetMood.HYPER]:
+                                        if random.random() < 0.7:
+                                            self.set_state(PetState.PRE_CHASE)
+                                            return
+
+                            # Probabilities based on mood
+                            prob_move = 0.40
+                            prob_look = 0.50
+                            prob_speak = 0.60
+                            prob_inquisitive = 0.70
+                            prob_sleep = 0.75
+                            prob_spin = 0.80
+                            prob_jump = 0.85
+                            prob_shake = 0.92
+                            prob_moonwalk = 0.94
+                            
+                            if self.mood == PetMood.SLEEPY:
+                                prob_sleep = 0.40
+                                prob_move = 0.50
+                                prob_look = 0.60
+                                prob_speak = 0.65
+                                prob_inquisitive = 0.70
+                                prob_spin = 0.75
+                                prob_jump = 0.80
+                                prob_shake = 0.90
+                                prob_moonwalk = 0.95
+                            elif self.mood == PetMood.HYPER:
+                                prob_move = 0.20
+                                prob_spin = 0.30
+                                prob_jump = 0.45
+                                prob_zoomies = 0.60
+                                prob_moonwalk = 0.70
+                                prob_shake = 0.80
+                                prob_look = 0.85
+                                prob_speak = 0.90
+                                prob_inquisitive = 0.95
+                                prob_sleep = 1.0 # No sleep
+                            elif self.mood == PetMood.GRUMPY:
+                                prob_shake = 0.30
+                                prob_look = 0.50
+                                prob_move = 0.60
+                                prob_speak = 0.70
+                                prob_inquisitive = 0.80
+                                prob_sleep = 0.90
+                                prob_spin = 0.95
+                                prob_jump = 0.98
+                                prob_moonwalk = 1.0
+                            
+                            if self.mood == PetMood.HYPER:
+                                if r < prob_move:
+                                    if random.random() < 0.5: self.set_state(PetState.MOVE_RIGHT)
+                                    else: self.set_state(PetState.MOVE_LEFT)
+                                elif r < prob_spin: self.set_state(PetState.SPIN)
+                                elif r < prob_jump: self.set_state(PetState.JUMP)
+                                elif r < prob_zoomies: self.set_state(PetState.ZOOMIES)
+                                elif r < prob_moonwalk:
+                                    if random.random() < 0.5: self.set_state(PetState.MOONWALK_RIGHT)
+                                    else: self.set_state(PetState.MOONWALK_LEFT)
+                                elif r < prob_shake: self.set_state(PetState.SHAKE)
+                                elif r < prob_look: self.set_state(PetState.LOOK_SEQUENCE)
+                                elif r < prob_speak: self.set_state(PetState.SPEAK)
+                                elif r < prob_inquisitive: self.set_state(PetState.INQUISITIVE)
+                                else: self.set_state(PetState.IDLE)
+                            else:
+                                if r < prob_move: 
+                                    if random.random() < 0.5:
+                                        self.set_state(PetState.MOVE_RIGHT)
+                                    else:
+                                        self.set_state(PetState.MOVE_LEFT)
+                                elif r < prob_look:
+                                    self.set_state(PetState.LOOK_SEQUENCE)
+                                elif r < prob_speak:
+                                    self.set_state(PetState.SPEAK)
+                                elif r < prob_inquisitive:
+                                    self.set_state(PetState.INQUISITIVE)
+                                elif r < prob_sleep:
+                                    self.set_state(PetState.SLEEP)
+                                elif r < prob_spin:
+                                    self.set_state(PetState.SPIN)
+                                elif r < prob_jump:
+                                    self.set_state(PetState.JUMP)
+                                elif r < prob_shake:
+                                    self.set_state(PetState.SHAKE)
+                                elif r < prob_moonwalk: 
+                                    if random.random() < 0.5:
+                                        self.set_state(PetState.MOONWALK_RIGHT)
+                                    else:
+                                        self.set_state(PetState.MOONWALK_LEFT)
+                                else: 
+                                    self.set_state(PetState.ZOOMIES)
                             
                     elif self.current_state in [PetState.MOVE_RIGHT, PetState.MOVE_LEFT, PetState.MOONWALK_RIGHT, PetState.MOONWALK_LEFT]:
                          import random
@@ -295,6 +435,81 @@ class PetSystem:
                 self.direction = -1
             elif new_state == PetState.MOVE_RIGHT:
                 self.direction = 1
+
+    def say_name(self):
+        self.speech_text = f"I am {self.name}!"
+        self.speech_timer = 3000
+        self.set_state(PetState.SPEAK)
+
+    def change_mood_randomly(self):
+        import random
+        weights = [0.4, 0.2, 0.2, 0.2] # Happy, Sleepy, Hyper, Grumpy
+        self.mood = random.choices([PetMood.HAPPY, PetMood.SLEEPY, PetMood.HYPER, PetMood.GRUMPY], weights=weights)[0]
+        self.mood_timer = 0
+        self.mood_duration = random.randint(20000, 60000)
+        
+        if self.mood == PetMood.SLEEPY:
+            self.set_state(PetState.SLEEP)
+        elif self.mood == PetMood.HYPER:
+            self.set_state(PetState.ZOOMIES)
+        elif self.mood == PetMood.GRUMPY:
+            self.set_state(PetState.SHAKE)
+            
+    def handle_interaction(self, interaction_type):
+        if interaction_type == 'click':
+            if self.current_state == PetState.SLEEP:
+                self.mood = PetMood.GRUMPY
+                self.set_state(PetState.SHAKE)
+                self.speech_text = "Mrrp!"
+                self.speech_timer = 1000
+            else:
+                if self.mood == PetMood.GRUMPY:
+                    if self.hunger > 80:
+                         self.speech_text = "Chirp chirp!" # Chirpo is hungry!
+                         self.speech_timer = 1000
+                         self.set_state(PetState.SHAKE)
+                    else:
+                        self.mood = PetMood.HAPPY
+                        self.set_state(PetState.JUMP)
+                elif self.mood == PetMood.HAPPY:
+                    import random
+                    if random.random() < 0.3:
+                        self.mood = PetMood.HYPER
+                        self.set_state(PetState.SPIN)
+                    else:
+                        self.set_state(PetState.JUMP)
+                self.mood_timer = 0
+
+    def feed(self):
+        self.hunger = 0
+        self.mood = PetMood.HAPPY
+        self.speech_text = "Mmm!"
+        self.speech_timer = 2000
+        self.set_state(PetState.JUMP)
+        self.energy = min(100, self.energy + 20)
+
+    def say_random_thing(self):
+        import random
+        
+        num_words = random.randint(1, 4)
+        sentence_words = []
+        
+        for _ in range(num_words):
+            if random.random() < 0.2: # 20% chance to say name
+                sentence_words.append(self.name)
+            else:
+                sentence_words.append(random.choice(self.sounds))
+                
+        sentence = " ".join(sentence_words)
+        
+        sentence = sentence.capitalize()
+        
+        punctuation = random.choice(["!", ".", "?", "!!"])
+        sentence += punctuation
+        
+        self.speech_text = sentence
+        self.speech_timer = 3000
+        self.set_state(PetState.SPEAK)
 
     def get_render_data(self):
         anim = self.animations[self.current_state]

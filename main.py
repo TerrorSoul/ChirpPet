@@ -1,9 +1,28 @@
 import sys
 import os
 import datetime
+import json
+
+CONFIG_FILE = 'config.json'
+
+def load_config():
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, 'r') as f:
+                return json.load(f)
+        except:
+            return {}
+    return {}
+
+def save_config(data):
+    try:
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump(data, f)
+    except Exception as e:
+        log_startup(f"Failed to save config: {e}")
 from PyQt6.QtWidgets import QApplication, QMainWindow, QMenu, QSystemTrayIcon
-from PyQt6.QtCore import Qt, QTimer, QPoint
-from PyQt6.QtGui import QPainter, QAction, QCursor, QColor, QIcon
+from PyQt6.QtCore import Qt, QTimer, QPoint, QPointF
+from PyQt6.QtGui import QPainter, QAction, QCursor, QColor, QIcon, QFont, QFontMetrics, QPolygonF
 from pet_system import PetSystem, PetState
 
 LOGGING_ENABLED = False
@@ -41,8 +60,30 @@ class PetWindow(QMainWindow):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         
         log_startup("Initializing PetSystem...")
-        self.pet = PetSystem('assets/defaultspritesheet.png')
-        log_startup("PetSystem Initialized")
+        
+        config = load_config()
+        saved_style = config.get('style', 'Default')
+        
+        style_path = 'assets/defaultspritesheet.png'
+        if saved_style == 'Christmas':
+            style_path = 'assets/christmasspritesheet.png'
+        elif saved_style == 'Sombrero':
+            style_path = 'assets/sombrerospritesheet.png'
+        elif saved_style == 'Melvin':
+            style_path = 'assets/melvinspritesheet.png'
+            
+        self.pet = PetSystem(style_path, saved_style)
+
+        
+        if getattr(sys, 'frozen', False):
+            exe_path = sys.executable
+            exe_name = os.path.basename(exe_path)
+            name_without_ext = os.path.splitext(exe_name)[0]
+            self.pet.name = name_without_ext
+        else:
+            self.pet.name = "ChirPet"
+            
+        log_startup(f"PetSystem Initialized with name: {self.pet.name}")
         
         self.resize(200, 200)
         
@@ -61,11 +102,18 @@ class PetWindow(QMainWindow):
 
         def set_style(style_name):
             if style_name == "Default":
-                self.pet.load_style('assets/defaultspritesheet.png')
+                self.pet.load_style('assets/defaultspritesheet.png', 'Default')
             elif style_name == "Christmas":
-                self.pet.load_style('assets/christmasspritesheet.png')
+                self.pet.load_style('assets/christmasspritesheet.png', 'Christmas')
             elif style_name == "Sombrero":
-                self.pet.load_style('assets/sombrerospritesheet.png')
+                self.pet.load_style('assets/sombrerospritesheet.png', 'Sombrero')
+            elif style_name == "Melvin":
+                self.pet.load_style('assets/melvinspritesheet.png', 'Melvin')
+            
+            config = load_config()
+            config['style'] = style_name
+            save_config(config)
+            
             self.update()
 
         action_style_default = QAction("Default", self)
@@ -80,7 +128,17 @@ class PetWindow(QMainWindow):
         action_style_sombrero.triggered.connect(lambda checked: set_style("Sombrero"))
         style_menu.addAction(action_style_sombrero)
 
+        action_style_melvin = QAction("Melvin", self)
+        action_style_melvin.triggered.connect(lambda checked: set_style("Melvin"))
+        style_menu.addAction(action_style_melvin)
+
+        action_feed = QAction("Feed", self)
+        action_feed.triggered.connect(self.pet.feed)
+        menu.addAction(action_feed)
+
         menu.addSeparator()
+
+
         
         close_action = QAction("Close Pet", self)
         close_action.triggered.connect(self.close)
@@ -110,7 +168,7 @@ class PetWindow(QMainWindow):
             if self.pet.current_state == PetState.ZOOMIES:
                 speed = 10
             elif self.pet.current_state == PetState.CHASE:
-                speed = 6
+                speed = 4
             
             move_x = 0
             move_y = 0
@@ -121,6 +179,8 @@ class PetWindow(QMainWindow):
                 
                 if abs(dx) < 20:
                     move_x = 0
+                    if self.pet.current_state == PetState.CHASE:
+                        self.pet.set_state(PetState.IDLE)
                 elif dx > 0:
                     move_x = speed
                     self.pet.direction = 1
@@ -248,11 +308,48 @@ class PetWindow(QMainWindow):
                 
             painter.restore()
 
+            if self.pet.speech_text:
+                painter.save()
+                painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+                
+                font = QFont("Arial", 10)
+                painter.setFont(font)
+                metrics = QFontMetrics(font)
+                text = self.pet.speech_text
+                text_width = metrics.horizontalAdvance(text)
+                text_height = metrics.height()
+                
+                bubble_padding = 10
+                bubble_w = text_width + bubble_padding * 2
+                bubble_h = text_height + bubble_padding * 2
+                
+                bubble_x = draw_x + anchor_x - bubble_w / 2
+                bubble_y = draw_y - bubble_h - 10
+                
+                path = QPolygonF()
+                path.append(QPointF(bubble_x, bubble_y))
+                path.append(QPointF(bubble_x + bubble_w, bubble_y))
+                path.append(QPointF(bubble_x + bubble_w, bubble_y + bubble_h))
+                path.append(QPointF(bubble_x + bubble_w / 2 + 5, bubble_y + bubble_h))
+                path.append(QPointF(bubble_x + bubble_w / 2, bubble_y + bubble_h + 10))
+                path.append(QPointF(bubble_x + bubble_w / 2 - 5, bubble_y + bubble_h))
+                path.append(QPointF(bubble_x, bubble_y + bubble_h))
+                path.append(QPointF(bubble_x, bubble_y))
+                
+                painter.setBrush(QColor(255, 255, 255))
+                painter.setPen(QColor(0, 0, 0))
+                painter.drawPolygon(path)
+                
+                painter.drawText(int(bubble_x + bubble_padding), int(bubble_y + bubble_padding + metrics.ascent()), text)
+                
+                painter.restore()
+
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             self.old_pos = event.globalPosition().toPoint()
             self.click_start_pos = event.globalPosition().toPoint()
             self.is_dragging = False
+            self.pet.handle_interaction('click')
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
