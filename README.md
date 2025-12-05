@@ -23,7 +23,7 @@ To build a standalone `.exe` file:
 1.  Ensure you have installed the requirements (including `pyinstaller`).
 2.  Run the build command:
     ```bash
-    pyinstaller --noconfirm --onefile --windowed --add-data "assets;assets" --name "ChirPet" main.py
+    pyinstaller --noconfirm --onefile --windowed --icon="assets/icon.ico" --add-data "assets;assets" --name "ChirPet" main.py
     ```
 3.  The executable will be located in the `dist/` folder.
 
